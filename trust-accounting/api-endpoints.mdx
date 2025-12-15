@@ -1,0 +1,140 @@
+---
+title: "API endpoints"
+description: "A high-level tour of the key Trust Accounting API endpoints and how to use them in common workflows."
+---
+
+## Overview
+
+The Trust Accounting API is organized into endpoint groups that support a single goal:
+turn **scanned brokerage statements** into **structured data** that you can use for trust reporting.
+
+At a high level, you will work with endpoints that:
+
+- **Upload documents** – Send scanned brokerage statements into the system.
+- **Manage TPA plans and accounts** – Represent plans and brokerage accounts in Stax.
+- **Attach and confirm statements** – Link uploaded documents to plans/accounts and lock the parsed result.
+- **Work with parsed transactions** – Retrieve and adjust the line items that will power your trust reports.
+
+This page focuses on **typical workflows** and how the endpoints fit together.
+For exact request/response shapes, see the **API Reference → Trust Accounting API** tab in the navigation.
+
+## Common workflows
+
+### 1. Set up plans and accounts
+
+In most integrations, you first represent your plans and brokerage accounts in Stax using the **TPA plan**
+and **TPA account** endpoints:
+
+- `POST /tpa/plan/create` – create a `TpaPlan` with metadata such as `planName`, `planType`,
+  `internalPlanId`, and year-end configuration.
+- `POST /tpa/account/create` – create a `TpaAccount` that represents a specific brokerage account
+  (for example, with `provider`, `number`, and `payee`).
+
+You can later fetch and list these using:
+
+- `GET /tpa/plan/get` and `GET /tpa/plan/list`
+- `GET /tpa/account/get` and `GET /tpa/account/list`
+
+These identifiers (`planId`, `accountId`, `accountNumber`, and related fields) will be used when you
+attach parsed statements and generate trust reports.
+
+### 2. Upload brokerage statement documents
+
+To ingest scanned statements, use the **Document upload** endpoint:
+
+- `POST /document/upload` – upload one or more files using `multipart/form-data`.
+
+Example:
+
+```bash
+curl https://api.stax.ai/document/upload \
+  -X POST \
+  -H "Authorization: Bearer sk_test_123" \
+  -H "email: developer@example.com" \
+  -F "files=@statement.pdf"
+```
+
+You can then use the document ID with:
+
+- `GET /document/get` – to retrieve document metadata, optional presigned URLs for pages/download,
+  and (when `statement=true`) associated `TpaStatement` information.
+
+### 3. Attach and confirm TPA statements
+
+Once a document is uploaded and parsed, you link it into the TPA model:
+
+- `POST /tpa/statement/attach` – attach a statement to a document by providing:
+  - `docId` – the document you uploaded.
+  - `planId` and `accountNumber` – which plan and account this statement belongs to.
+- `GET /tpa/statement/list` – list existing statements, optionally filtered by `planId` or `accountId`.
+- `POST /tpa/statement/confirm` – confirm (lock) a statement by `statementId` once you are satisfied
+  with the parsed result.
+
+Confirming a statement typically indicates that the parsed balances and transactions are ready to be used
+for trust reporting and downstream spreadsheets.
+
+### 4. Work with parsed transactions
+
+Parsed line items from the statement are exposed via the **TPA transaction** endpoints:
+
+- `GET /tpa/transaction/list` – list `TpaTransaction` records for a given `statementId`.
+- `POST /tpa/transaction/create` – create or adjust a transaction associated with a statement.
+
+Each `TpaTransaction` includes details such as:
+
+- `date`, `description`, `amount`
+- `txType` and `txSubType`
+- `page` and `confidence`
+
+You can use these transactions, together with the summary fields on `TpaStatement`
+(`beginningBalance`, `endingBalance`, `tx`, `diff`, etc.), as the foundation for your trust report
+spreadsheets.
+
+## Request patterns and conventions
+
+### Authentication
+
+All requests must be authenticated using:
+
+- `Authorization: Bearer {apiKey}`
+- `email: user@example.com`
+
+This corresponds to the `bearerAuth` security scheme in the OpenAPI definition (alongside internal
+schemes such as `cookieAuth` and `moduleAuth`). See the **Authentication** page for more details
+and best practices.
+
+### Idempotency
+
+For operations that **create or modify** resources (for example, creating transactions), we recommend you
+use an **idempotency key** to safely retry requests without accidentally duplicating work.
+
+Although the exact header name and behavior are defined in the API Reference, a typical pattern looks like:
+
+```bash
+curl https://api.stax.ai/trust/transactions \
+  -X POST \
+  -H "Authorization: Bearer sk_test_123" \
+  -H "email: developer@example.com" \
+  -H "Idempotency-Key: onboarding-123-deposit-1" \
+  -H "Content-Type: application/json" \
+  -d '{ ... }'
+```
+
+Check each endpoint’s documentation to confirm whether idempotency is supported and how conflicts are
+reported.
+
+### Pagination and filtering
+
+List endpoints commonly support:
+
+- Filters such as `planId`, `accountId`, or `statementId` (for example, on statement and transaction lists).
+- Standard pagination and filtering parameters documented on each endpoint.
+
+The exact parameters differ by endpoint and are fully documented in the generated API Reference.
+
+## Where to go next
+
+- Use the **API Reference → Trust Accounting API** tab for detailed request/response schemas.
+- Review the **Data model** page to understand the entities you are working with.
+- See **Limits & performance** for guidance on rate limits, retries, and bulk operations.
+

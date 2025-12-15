@@ -1,0 +1,86 @@
+---
+title: "Authentication"
+description: "How to authenticate requests to the Stax Trust Accounting API using Bearer tokens and user email headers."
+---
+
+## Overview
+
+The Trust Accounting API uses **token-based authentication**. Every request must include:
+
+- `Authorization: Bearer {apiKey}`
+- `email: user@example.com`
+
+This pattern is defined in the `bearerAuth` security scheme in the API Reference, and it ensures that:
+
+- The **API key** grants access to your Stax account.
+- The **`email` header** identifies the acting user for auditing, authorization, and logging.
+
+Requests missing either the Bearer token or the `email` header will be rejected.
+
+## Getting your API key
+
+1. Go to the [Stax dashboard](https://my.stax.ai)
+2. Click on the "Setttings" tab
+3. On the "Account" page, scroll down to the "Developer Keys" section
+
+API keys are managed in the Stax dashboard (or via your account manager, depending on your setup).
+In production, you should:
+
+- Use **server-side environments** (for example, environment variables or a secrets manager) to store keys.
+- Avoid embedding keys directly in frontend code, mobile apps, or client-side logs.
+- Use **separate keys** for test and production environments.
+
+If you are unsure where to obtain your keys, contact your Stax representative or support team.
+
+## Making an authenticated request
+
+Here is a minimal example of an authenticated request to the Trust Accounting API.
+The path is illustrative; consult the **API Reference → Trust Accounting API** tab for the exact endpoints
+you will call.
+
+```http
+POST /trust/example HTTP/1.1
+Host: api.stax.ai
+Authorization: Bearer sk_test_123
+email: developer@example.com
+Content-Type: application/json
+
+{
+  "exampleField": "value"
+}
+```
+
+The same request in `curl`:
+
+```bash
+curl https://api.stax.ai/trust/example \
+  -X POST \
+  -H "Authorization: Bearer sk_test_123" \
+  -H "email: developer@example.com" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "exampleField": "value"
+  }'
+```
+
+### HTTP status codes for auth errors
+
+When authentication fails, you can expect standard HTTP error responses, such as:
+
+- `401 Unauthorized` when the API key is missing, invalid, or expired.
+- `403 Forbidden` when the key is valid but does not have permission to access the requested resource.
+
+The response body follows the `Error` schema defined in the API Reference and typically includes:
+
+- A human-readable `error` message.
+- An `authError` flag indicating that the failure is related to authentication.
+
+## Best practices
+
+- **Rotate keys regularly**: Treat API keys like passwords. Rotate them periodically and immediately if you
+  suspect compromise.
+- **Scope usage by environment**: Use different keys for development, staging, and production.
+- **Log responsibly**: Do not log full API keys. If you need to log something for debugging, log only a
+  short, non-sensitive prefix (for example, the last 4 characters).
+- **Use HTTPS everywhere**: Always call the API over HTTPS to prevent interception of tokens and headers.
+

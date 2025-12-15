@@ -1,0 +1,97 @@
+---
+title: "Limits & performance"
+description: "Rate limits, SLAs, and performance considerations when integrating with the Stax Trust Accounting API."
+---
+
+## Overview
+
+This page describes the types of limits and performance characteristics you should design for when
+integrating with the Trust Accounting API. Exact numeric values (for example, specific requests-per-second
+caps or SLAs) may depend on your contract and environment; your Stax representative can provide concrete
+figures.
+
+The guidance here focuses on **how** to integrate safely and efficiently.
+
+## Rate limits
+
+The Trust Accounting API applies rate limits to protect the stability of the platform for all tenants.
+Limits are typically enforced at the level of:
+
+- **API key or tenant** – per-tenant or per-key caps on request volume.
+- **Endpoint category** – stricter limits on heavy endpoints (for example, large exports).
+
+When you exceed a rate limit, you can expect:
+
+- An HTTP `429 Too Many Requests` response.
+- A response body describing the error (following the shared `Error` schema).
+
+### Recommended client behavior
+
+- **Implement backoff and retry**:
+  - On `429` responses, back off using exponential or jittered backoff before retrying.
+  - Respect any `Retry-After` headers when provided.
+- **Avoid unnecessary polling**:
+  - Use pagination and filtering to pull only the data you need.
+  - Prefer fewer, more targeted requests over frequent, broad list calls.
+
+If you anticipate sustained high throughput (for example, large batch migrations), coordinate with Stax
+in advance to ensure your limits and configuration are appropriate.
+
+## Payload sizes and pagination
+
+To keep responses fast and predictable:
+
+- Large collection endpoints are **paginated**.
+- Individual responses may be subject to **maximum payload sizes**.
+
+When designing integrations:
+
+- Use `limit` or page-size parameters thoughtfully. Smaller pages improve perceived latency and make error
+  handling simpler.
+- Use pagination cursors or page tokens returned by the API rather than constructing your own offsets,
+  where applicable.
+- For bulk operations, prefer **multiple smaller requests** over single extremely large ones.
+
+Refer to the API Reference for the exact pagination parameters supported by each endpoint.
+
+## Performance guidelines
+
+Typical expectations for well-formed requests:
+
+- **Low-latency reads** for single-resource fetches and small list operations under normal load.
+- **Slightly higher latency** for heavier operations such as complex reports, exports, or reconciliation jobs.
+
+To get the best performance:
+
+- Reuse HTTP connections where possible (for example, via keep-alive or your HTTP client’s connection pool).
+- Cache stable data on your side if appropriate (for example, configuration or reference data).
+- Avoid sending redundant or unused data fields in request bodies.
+
+## Reliability and retries
+
+As with any networked API, you should design your integration to handle transient failures.
+
+Recommended patterns:
+
+- **Idempotent writes**:
+  - Use an idempotency key for create/update operations where supported.
+  - This lets you safely retry without double-charging or duplicating records.
+- **Retry on transient errors**:
+  - Use limited, backoff-based retries on network timeouts or 5xx responses.
+  - Log failures with enough context (request ID, endpoint, status code) for later investigation.
+
+## Environment considerations
+
+Most integrations use at least two environments:
+
+- **Test/sandbox** – for development and QA. Limits are typically more relaxed but may share similar patterns.
+- **Production** – for live traffic. Limits and SLAs are tuned for stability.
+
+We recommend:
+
+- Validating your onboarding, transaction, and reporting flows end-to-end in a test environment.
+- Measuring your own throughput and latency under realistic workloads before going live.
+
+If you have specific throughput, latency, or availability requirements, work with your Stax representative
+to confirm that your configuration and limits align with those needs.
+
